@@ -1,0 +1,106 @@
+#!/bin/python2.7
+#
+# A simple tool for cracking Jboss passwords in the format of hex(md5(user:realm:password))
+#
+# Auther: Ralph Vickery
+# Version: 0.1
+# Date: 04/04/2019
+
+import os
+import multiprocessing
+import argparse
+import md5
+import re
+from termcolor import colored
+
+
+
+# Handle command line arguments
+cliParser = argparse.ArgumentParser(description="A simple tool for performing dictionary attacks on jboss hashes")
+cliParser.add_argument('-H', metavar='Jboss Property File', type=argparse.FileType('r'),
+                       help='Jboss application or management propery file', required=True)
+cliParser.add_argument('-P', metavar='Password List', type=argparse.FileType('r'),
+                       help='Dictionary of passwords, one password per line', required=True)
+cliParser.add_argument('-r', metavar="Jboss Realm", help='The realm', required=True)
+cliParser.add_argument('-d', action='store_true', help='Print debug messages')
+
+
+args = cliParser.parse_args()
+
+#Define Variables
+passwords = []
+users = []
+hashes = []
+
+def LoadPropertyFile():
+	for line in args.H:
+		
+		line = line.strip('\n')
+		line = line.strip('\r')
+		if re.search(r"^(?!#).*=[a-f0-9]{32}$",line):
+			output = line.split("=")
+			users.append(output[0])
+			hashes.append(output[1])
+
+	print ("%s Hashes Loaded" % len(users))
+
+def LoadPasswordList():
+	print ("Loading passwords into memory...")
+	#add blank password
+	passwords.append("")
+
+	#add users to passwords
+	for user in users:
+		passwords.append(user)
+
+	#add passwords
+	for password in args.P:
+		password = password.strip('\n')
+		password = password.strip('\t')
+
+		passwords.append(password)
+
+	print ("%s Passwords Loaded" % len(passwords))
+
+def HashPassword(user,password):
+	hash = md5.new()
+	hash.update(user+":"+args.r+":"+password)
+	return hash.hexdigest()
+
+def CheckForCollision(hash):
+	if hash in hashes:
+		return True
+	else:
+		return False
+
+def CrackPasswords(user):
+	for password in passwords:
+		hash = HashPassword(user, password)
+		collision = CheckForCollision(hash)
+		#print hash
+
+		if collision:
+			print colored("Password Found: " +user+":"+password, 'red')
+			break
+
+#Create the required lists in memory.
+print colored("#########################################################", 'blue')
+LoadPropertyFile()
+#LoadUserList()
+LoadPasswordList()
+#LoadHashList()
+print colored("#########################################################", 'blue')
+print("")
+print("-----------------------------------")
+print("Cracking Started")
+print("-----------------------------------")
+
+for user in users:
+	print("Cracking Passwords for user: "+user)
+	CrackPasswords(user)
+
+
+
+
+
+
